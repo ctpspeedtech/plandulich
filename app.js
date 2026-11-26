@@ -3,7 +3,7 @@
 
   const CLIENT_ID = "1020088389545-30u5n8i5pc57k5ol61lrpi91q2ijdfv4.apps.googleusercontent.com";
   const DRIVE_FILE_NAME = "ngay-minh-di-planner.json";
-  const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+  const DRIVE_SCOPE = "openid email profile https://www.googleapis.com/auth/drive.appdata";
   const STORAGE_KEY = "ngay-minh-di-planner-v1";
   const monthNames = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
   const weekdayNames = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
@@ -28,22 +28,24 @@
   let calendarView = "month";
   let tokenClient = null;
   let accessToken = null;
+  let googleProfile = null;
   let driveFileId = null;
-  let planSaveTimer = 0;
   const photoUrls = new Map();
-  let addParentId = null;
+  let editingItem = null;
   let toastTimer = 0;
   let saveTimer = 0;
 
   const $ = (id) => document.getElementById(id);
   const els = {
     calendarDays: $("calendarDays"), yearCalendar: $("yearCalendar"), weekdays: $("weekdays"), monthLabel: $("monthLabel"), selectedDateLabel: $("selectedDateLabel"),
-    dayCount: $("dayCount"), treeContainer: $("treeContainer"), emptyState: $("emptyState"),
-    dayNoteText: $("dayNoteText"), destinationInput: $("destinationInput"), tripTitle: $("tripTitle"),
+    dayCount: $("dayCount"), dayItemList: $("dayItemList"), dayItemsEmpty: $("dayItemsEmpty"),
+    destinationInput: $("destinationInput"), tripTitle: $("tripTitle"),
     syncState: $("syncState"), syncText: $("syncText"), googleButton: $("googleButton"),
-    googleButtonText: $("googleButtonText"), modalBackdrop: $("modalBackdrop"), noteForm: $("noteForm"),
-    noteInput: $("noteInput"), noteCountFooter: $("noteCountFooter"), todayDateLabel: $("todayDateLabel"),
-    dayPlanInput: $("dayPlanInput"), itineraryList: $("itineraryList"), expenseRows: $("expenseRows"), photoGrid: $("photoGrid")
+    googleButtonText: $("googleButtonText"), googleProfile: $("googleProfile"),
+    googleProfileImage: $("googleProfileImage"), googleProfileInitials: $("googleProfileInitials"),
+    googleProfileEmail: $("googleProfileEmail"), itemModalBackdrop: $("itemModalBackdrop"),
+    dayItemForm: $("dayItemForm"), dayItemType: $("dayItemType"), noteInput: $("noteInput"),
+    todayDateLabel: $("todayDateLabel"), menuToggle: $("menuToggle"), menuPopover: $("menuPopover")
   };
 
   function loadLocalState() {
@@ -104,7 +106,9 @@
     console.error("Google Drive sync failed.", error);
     if (error && error.status === 401) {
       accessToken = null;
+      googleProfile = null;
       els.googleButtonText.textContent = "Kết nối lại Google";
+      updateGoogleButton();
       setSyncStatus("error", "Phiên Google đã hết hạn");
       showToast("Phiên Google đã hết hạn. Hãy kết nối lại để tiếp tục đồng bộ.");
       return;
@@ -255,57 +259,6 @@
     });
   }
 
-  function countNodes(nodes) {
-    return nodes.reduce((sum, node) => sum + 1 + countNodes(Array.isArray(node.children) ? node.children : []), 0);
-  }
-
-  function renderTree(nodes, parentElement) {
-    nodes.forEach((node) => {
-      const item = document.createElement("div");
-      item.className = "tree-node";
-      if (node.done) item.classList.add("is-done");
-      item.dataset.nodeId = node.id;
-
-      const content = document.createElement("div");
-      content.className = "tree-node-content";
-      const marker = document.createElement("span");
-      marker.className = "node-marker";
-      marker.setAttribute("aria-hidden", "true");
-      const text = document.createElement("span");
-      text.className = "node-text";
-      text.textContent = node.text;
-      const actions = document.createElement("div");
-      actions.className = "node-actions";
-
-      const doneButton = makeNodeAction(node.done ? "✓" : "○", node.done ? "Đánh dấu chưa xong" : "Đánh dấu hoàn tất", () => {
-        node.done = !node.done;
-        persistState();
-        renderDay();
-      });
-      const branchButton = makeNodeAction("+", "Thêm nhánh con", () => openNoteModal(node.id));
-      const deleteButton = makeNodeAction("×", "Xóa ghi chú và các nhánh con", () => {
-        if (!window.confirm(`Xóa “${node.text}” và các nhánh bên dưới?`)) return;
-        const roots = state.days[selectedDate] || [];
-        removeNode(roots, node.id);
-        persistState();
-        renderCalendar();
-        renderDay();
-      });
-      deleteButton.classList.add("delete");
-      actions.append(doneButton, branchButton, deleteButton);
-      content.append(marker, text, actions);
-      item.append(content);
-
-      if (Array.isArray(node.children) && node.children.length) {
-        const children = document.createElement("div");
-        children.className = "tree-children";
-        renderTree(node.children, children);
-        item.append(children);
-      }
-      parentElement.append(item);
-    });
-  }
-
   function makeNodeAction(label, ariaLabel, callback) {
     const button = document.createElement("button");
     button.type = "button";
@@ -328,19 +281,8 @@
 
   function renderDay() {
     els.selectedDateLabel.textContent = formatSelectedDate(selectedDate);
-    const roots = state.days[selectedDate] || [];
-    const count = countNodes(roots);
-    els.dayCount.textContent = `${count} mục`;
-    els.noteCountFooter.textContent = `${count} ý tưởng`;
-    els.dayNoteText.textContent = state.dayNotes[selectedDate] || "Mỗi hành trình bắt đầu từ một ý tưởng nhỏ.";
-    els.treeContainer.replaceChildren();
-    els.emptyState.hidden = count > 0;
-    if (count) renderTree(roots, els.treeContainer);
     const details = state.dayDetails[selectedDate] || {};
-    els.dayPlanInput.value = details.plan || "";
-    renderItinerary(details.itinerary || []);
-    renderExpenses(details.expenses || []);
-    renderPhotos(details.photos || []);
+    renderDayItems(details);
   }
 
   function getDayDetails() {
@@ -352,99 +294,118 @@
     return details;
   }
 
-  function renderItinerary(entries) {
-    els.itineraryList.replaceChildren();
-    $("itineraryEmpty").hidden = entries.length > 0;
-    entries.slice().sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99")).forEach((entry) => {
-      const row = document.createElement("div");
-      row.className = "itinerary-row";
-      if (entry.done) row.classList.add("is-done");
-      const time = document.createElement("time");
-      time.className = "itinerary-time";
-      time.textContent = entry.time || "Cả ngày";
-      const marker = document.createElement("span");
-      marker.className = "itinerary-marker";
-      const text = document.createElement("span");
-      text.className = "itinerary-text";
-      text.textContent = entry.text;
-      const done = makeNodeAction(entry.done ? "✓" : "○", entry.done ? "Đánh dấu chưa xong" : "Đánh dấu hoàn tất", () => {
-        entry.done = !entry.done;
-        persistState();
-        renderDay();
-      });
-      done.classList.add("entry-check");
-      const remove = makeNodeAction("×", "Xóa lịch trình", () => {
-        const details = getDayDetails();
-        details.itinerary = details.itinerary.filter((item) => item.id !== entry.id);
-        persistState();
-        renderCalendar();
-        renderDay();
-      });
-      remove.classList.add("delete");
-      row.append(time, marker, text, done, remove);
-      els.itineraryList.append(row);
-    });
-  }
-
-  function renderExpenses(expenses) {
-    els.expenseRows.replaceChildren();
-    $("expenseEmpty").hidden = expenses.length > 0;
-    let total = 0;
-    expenses.forEach((expense) => {
-      total += Number(expense.amount) || 0;
-      const row = document.createElement("tr");
-      const name = document.createElement("td");
-      name.textContent = expense.text;
-      const category = document.createElement("td");
-      category.textContent = expense.category || "Khác";
-      const amount = document.createElement("td");
-      amount.className = "amount-cell";
-      amount.textContent = formatCurrency(expense.amount);
-      const actions = document.createElement("td");
-      actions.className = "expense-actions";
-      const remove = makeNodeAction("×", "Xóa khoản chi", () => {
-        const details = getDayDetails();
-        details.expenses = details.expenses.filter((item) => item.id !== expense.id);
-        persistState();
-        renderCalendar();
-        renderDay();
-      });
-      remove.classList.add("delete");
-      actions.append(remove);
-      row.append(name, category, amount, actions);
-      els.expenseRows.append(row);
-    });
-    $("expenseTotal").textContent = formatCurrency(total);
-  }
-
   function formatCurrency(amount) {
     return `${new Intl.NumberFormat("vi-VN").format(Number(amount) || 0)} ₫`;
   }
 
-  function renderPhotos(photos) {
-    els.photoGrid.replaceChildren();
-    $("photosEmpty").hidden = photos.length > 0;
-    photos.forEach((photo) => {
-      const card = document.createElement("figure");
-      card.className = "photo-card";
-      const image = document.createElement("img");
-      image.alt = photo.name || "Ảnh chuyến đi";
-      image.loading = "lazy";
-      if (photo.dataUrl) {
-        image.src = photo.dataUrl;
-      } else if (photo.driveFileId && accessToken) {
-        loadDrivePhoto(photo, image);
+  function collectDayItems(details) {
+    const items = [];
+    if (details.plan) items.push({ type: "plan", id: "plan", text: details.plan });
+    if (state.dayNotes[selectedDate]) items.push({ type: "dayNote", id: "dayNote", text: state.dayNotes[selectedDate] });
+
+    const collectNotes = (nodes, depth = 0, parentText = "") => {
+      nodes.forEach((node) => {
+        items.push({ type: "note", id: node.id, text: node.text, done: node.done, depth, parentText, data: node });
+        collectNotes(Array.isArray(node.children) ? node.children : [], depth + 1, node.text);
+      });
+    };
+    collectNotes(state.days[selectedDate] || []);
+    (details.itinerary || []).slice().sort((a, b) => (a.time || "99:99").localeCompare(b.time || "99:99"))
+      .forEach((entry) => items.push({ type: "itinerary", id: entry.id, text: entry.text, done: entry.done, time: entry.time, data: entry }));
+    (details.expenses || []).forEach((entry) => items.push({ type: "expense", id: entry.id, text: entry.text, category: entry.category, amount: entry.amount, data: entry }));
+    (details.photos || []).forEach((entry) => items.push({ type: "photo", id: entry.id, text: entry.name || "Khoảnh khắc", data: entry }));
+    return items;
+  }
+
+  function deleteDayItem(item) {
+    if (item.type === "photo") {
+      deletePhoto(item.data);
+      return;
+    }
+    if (item.type === "note" && !window.confirm(`Xóa “${item.text}” và các nhánh bên dưới?`)) return;
+    if (item.type === "plan") {
+      getDayDetails().plan = "";
+    } else if (item.type === "dayNote") {
+      delete state.dayNotes[selectedDate];
+    } else if (item.type === "note") {
+      removeNode(state.days[selectedDate] || [], item.id);
+    } else if (item.type === "itinerary") {
+      const details = getDayDetails();
+      details.itinerary = details.itinerary.filter((entry) => entry.id !== item.id);
+    } else if (item.type === "expense") {
+      const details = getDayDetails();
+      details.expenses = details.expenses.filter((entry) => entry.id !== item.id);
+    }
+    persistState();
+    renderCalendar();
+    renderDay();
+  }
+
+  function renderDayItems(details) {
+    const items = collectDayItems(details);
+    els.dayCount.textContent = `${items.length} mục`;
+    els.dayItemList.replaceChildren();
+    els.dayItemsEmpty.hidden = items.length > 0;
+    const labels = { plan: "Ý tưởng", dayNote: "Lời nhắn", note: "Ghi chú", itinerary: "Lịch trình", expense: "Chi tiêu", photo: "Ảnh" };
+
+    items.forEach((entry) => {
+      const card = document.createElement("article");
+      card.className = "day-item";
+      card.dataset.itemType = entry.type;
+      if (entry.depth) card.style.setProperty("--item-depth", String(Math.min(entry.depth, 3)));
+      if (entry.done) card.classList.add("is-done");
+
+      const main = document.createElement("div");
+      main.className = "day-item-main";
+      if (entry.type === "photo") {
+        const image = document.createElement("img");
+        image.className = "day-item-photo";
+        image.alt = entry.text;
+        image.loading = "lazy";
+        if (entry.data.dataUrl) image.src = entry.data.dataUrl;
+        else if (entry.data.driveFileId && accessToken) loadDrivePhoto(entry.data, image);
+        main.append(image);
       }
-      const caption = document.createElement("figcaption");
-      caption.textContent = photo.name || "Khoảnh khắc";
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "photo-remove";
-      remove.textContent = "×";
-      remove.setAttribute("aria-label", `Xóa ảnh ${photo.name || ""}`);
-      remove.addEventListener("click", () => deletePhoto(photo));
-      card.append(image, caption, remove);
-      els.photoGrid.append(card);
+
+      const copy = document.createElement("div");
+      copy.className = "day-item-copy";
+      const heading = document.createElement("div");
+      heading.className = "day-item-heading";
+      const kind = document.createElement("span");
+      kind.className = "day-item-kind";
+      kind.textContent = labels[entry.type];
+      heading.append(kind);
+      const meta = document.createElement("span");
+      meta.className = "day-item-meta";
+      if (entry.type === "itinerary") meta.textContent = entry.time || "Cả ngày";
+      else if (entry.type === "expense") meta.textContent = `${entry.category || "Khác"} · ${formatCurrency(entry.amount)}`;
+      else if (entry.parentText) meta.textContent = `Nhánh của ${entry.parentText}`;
+      if (meta.textContent) heading.append(meta);
+      const text = document.createElement("p");
+      text.className = "day-item-text";
+      text.textContent = entry.text;
+      copy.append(heading, text);
+      main.append(copy);
+
+      const actions = document.createElement("div");
+      actions.className = "day-item-actions";
+      if (entry.type === "note" || entry.type === "itinerary") {
+        const done = makeNodeAction(entry.done ? "✓" : "○", entry.done ? "Đánh dấu chưa xong" : "Đánh dấu hoàn tất", () => {
+          entry.data.done = !entry.data.done;
+          persistState();
+          renderDay();
+        });
+        actions.append(done);
+      }
+      if (entry.type !== "photo") {
+        const edit = makeNodeAction("✎", `Sửa ${labels[entry.type].toLowerCase()}`, () => openDayItemModal(entry.type, entry));
+        actions.append(edit);
+      }
+      const remove = makeNodeAction("×", `Xóa ${labels[entry.type].toLowerCase()}`, () => deleteDayItem(entry));
+      remove.classList.add("delete");
+      actions.append(remove);
+      card.append(main, actions);
+      els.dayItemList.append(card);
     });
   }
 
@@ -528,21 +489,6 @@
     });
   }
 
-  function openNoteModal(parentId) {
-    addParentId = parentId || null;
-    $("modalKicker").textContent = addParentId ? "MỞ RỘNG Ý TƯỞNG" : "MỘT Ý TƯỞNG MỚI";
-    $("modalTitle").textContent = addParentId ? "Thêm nhánh con" : "Thêm ghi chú";
-    els.noteInput.value = "";
-    els.modalBackdrop.hidden = false;
-    window.setTimeout(() => els.noteInput.focus(), 0);
-  }
-
-  function closeNoteModal() {
-    els.modalBackdrop.hidden = true;
-    addParentId = null;
-    els.noteForm.reset();
-  }
-
   function findNode(nodes, id) {
     for (const node of nodes) {
       if (node.id === id) return node;
@@ -552,24 +498,27 @@
     return null;
   }
 
-  function saveNode(text) {
-    const roots = state.days[selectedDate] || (state.days[selectedDate] = []);
-    const newNode = { id: uid(), text, done: false, children: [] };
-    if (addParentId) {
-      const parent = findNode(roots, addParentId);
-      if (!parent) {
-        showToast("Không tìm thấy nhánh cần thêm ghi chú.");
-        return;
-      }
-      if (!Array.isArray(parent.children)) parent.children = [];
-      parent.children.push(newNode);
-    } else {
-      roots.push(newNode);
-    }
-    closeNoteModal();
-    persistState();
-    renderCalendar();
-    renderDay();
+  function populateNoteParents() {
+    const select = $("noteParent");
+    select.replaceChildren(new Option("Ghi chú mới", ""));
+    const appendOptions = (nodes, depth = 0) => {
+      nodes.forEach((node) => {
+        const option = new Option(`${"— ".repeat(depth)}${node.text}`, node.id);
+        select.append(option);
+        appendOptions(Array.isArray(node.children) ? node.children : [], depth + 1);
+      });
+    };
+    appendOptions(state.days[selectedDate] || []);
+  }
+
+  function updateItemModalFields() {
+    const type = els.dayItemType.value;
+    document.querySelectorAll("[data-item-fields]").forEach((section) => {
+      section.hidden = section.dataset.itemFields !== type;
+    });
+    $("itemModalTitle").textContent = editingItem ? "Sửa mục trong ngày" : "Thêm vào ngày";
+    $("itemModalSubmit").innerHTML = editingItem ? "Lưu thay đổi <span>↗</span>" : "Thêm mục <span>↗</span>";
+    $("noteParent").disabled = Boolean(editingItem);
   }
 
   function updateTripDetails() {
@@ -581,10 +530,212 @@
   }
 
   function updateGoogleButton() {
-    if (accessToken) {
-      els.googleButtonText.textContent = "Đã kết nối Google";
-      setSyncStatus("", "Đã đồng bộ Google Drive");
+    const connected = Boolean(accessToken && googleProfile);
+    els.googleButton.hidden = connected;
+    els.googleProfile.hidden = !connected;
+    if (!connected) {
+      els.googleProfileImage.hidden = true;
+      els.googleProfileInitials.hidden = true;
+      els.googleProfileImage.removeAttribute("src");
+      return;
     }
+    els.googleProfileEmail.textContent = googleProfile.email;
+    const initials = googleProfile.name
+      ? googleProfile.name.trim().split(/\s+/).slice(-2).map((part) => part[0]).join("").toUpperCase()
+      : googleProfile.email[0].toUpperCase();
+    els.googleProfileInitials.textContent = initials;
+    els.googleProfileImage.onerror = () => {
+      els.googleProfileImage.hidden = true;
+      els.googleProfileInitials.hidden = false;
+    };
+    els.googleProfileInitials.hidden = Boolean(googleProfile.picture);
+    els.googleProfileImage.hidden = !googleProfile.picture;
+    if (googleProfile.picture) els.googleProfileImage.src = googleProfile.picture;
+  }
+
+  async function loadGoogleProfile(token) {
+    const response = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      const error = new Error(`Google profile request failed (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    const profile = await response.json();
+    if (!profile.email) throw new Error("Google profile response did not include an email address.");
+    return { email: profile.email, name: profile.name || "", picture: profile.picture || "" };
+  }
+
+  function openDayItemModal(type = "note", item = null) {
+    editingItem = item ? { type: item.type, id: item.id } : null;
+    els.dayItemForm.reset();
+    populateNoteParents();
+    const details = state.dayDetails[selectedDate] || {};
+    const options = Array.from(els.dayItemType.options);
+    options.forEach((option) => {
+      option.disabled = !editingItem && (
+        (option.value === "plan" && Boolean(details.plan))
+        || (option.value === "dayNote" && Boolean(state.dayNotes[selectedDate]))
+      );
+    });
+    els.dayItemType.disabled = Boolean(editingItem);
+    els.dayItemType.value = type;
+    if (els.dayItemType.selectedOptions[0].disabled) {
+      els.dayItemType.value = options.find((option) => !option.disabled).value;
+    }
+
+    if (item) {
+      if (item.type === "note") {
+        els.noteInput.value = item.text;
+      } else if (item.type === "plan") {
+        $("dayPlanInput").value = item.text;
+      } else if (item.type === "dayNote") {
+        $("dayNoteInput").value = item.text;
+      } else if (item.type === "itinerary") {
+        $("itineraryTime").value = item.time || "";
+        $("itineraryText").value = item.text;
+      } else if (item.type === "expense") {
+        $("expenseText").value = item.text;
+        $("expenseCategory").value = item.category || "";
+        $("expenseAmount").value = item.amount;
+      }
+    }
+    updateItemModalFields();
+    $("itemModalKicker").textContent = editingItem ? "CHỈNH SỬA NỘI DUNG" : "MỘT MỤC MỚI";
+    els.itemModalBackdrop.hidden = false;
+    const focusTarget = els.dayItemForm.querySelector(`[data-item-fields="${els.dayItemType.value}"] textarea, [data-item-fields="${els.dayItemType.value}"] input`);
+    window.setTimeout(() => focusTarget?.focus(), 0);
+  }
+
+  function closeDayItemModal() {
+    els.itemModalBackdrop.hidden = true;
+    editingItem = null;
+    els.dayItemType.disabled = false;
+    els.dayItemForm.reset();
+  }
+
+  async function saveDayItem(event) {
+    event.preventDefault();
+    const type = els.dayItemType.value;
+    const existing = editingItem;
+    const valueFor = (id) => $(id).value.trim();
+
+    if (type === "photo") {
+      const files = Array.from($("photoInput").files || []);
+      if (!files.length) {
+        showToast("Hãy chọn ít nhất một ảnh để thêm.");
+        return;
+      }
+      const details = getDayDetails();
+      const failures = [];
+      let added = 0;
+      for (const file of files) {
+        try {
+          const dataUrl = await compressImage(file);
+          details.photos.push({
+            id: uid(),
+            name: file.name,
+            mimeType: dataUrl.slice(5, dataUrl.indexOf(";")),
+            dataUrl
+          });
+          added += 1;
+        } catch (error) {
+          console.error(`Could not add photo "${file.name}".`, error);
+          failures.push(file.name);
+        }
+      }
+      if (!added) {
+        showToast(`Không thể thêm ảnh. Tệp cần là ảnh hợp lệ và nhỏ hơn 15 MB.`);
+        return;
+      }
+      if (failures.length) showToast(`Đã thêm ${added} ảnh; không thể thêm ${failures.length} ảnh còn lại.`);
+    } else if (type === "note") {
+      const text = valueFor("noteInput");
+      if (!text) {
+        showToast("Hãy nhập nội dung ghi chú.");
+        return;
+      }
+      const roots = state.days[selectedDate] || (state.days[selectedDate] = []);
+      if (existing) {
+        const node = findNode(roots, existing.id);
+        if (!node) {
+          showToast("Không tìm thấy ghi chú cần sửa.");
+          return;
+        }
+        node.text = text;
+      } else {
+        const parentId = $("noteParent").value;
+        const node = { id: uid(), text, done: false, children: [] };
+        if (parentId) {
+          const parent = findNode(roots, parentId);
+          if (!parent) {
+            showToast("Không tìm thấy nhánh cần thêm ghi chú.");
+            return;
+          }
+          if (!Array.isArray(parent.children)) parent.children = [];
+          parent.children.push(node);
+        } else {
+          roots.push(node);
+        }
+      }
+    } else if (type === "plan" || type === "dayNote") {
+      const text = valueFor(type === "plan" ? "dayPlanInput" : "dayNoteInput");
+      if (!text) {
+        showToast("Hãy nhập nội dung trước khi lưu.");
+        return;
+      }
+      const currentDetails = state.dayDetails[selectedDate] || {};
+      if (!existing && ((type === "plan" && currentDetails.plan) || (type === "dayNote" && state.dayNotes[selectedDate]))) {
+        showToast("Ngày này đã có mục cùng loại. Hãy sửa mục hiện có.");
+        return;
+      }
+      if (type === "plan") getDayDetails().plan = text;
+      else state.dayNotes[selectedDate] = text;
+    } else if (type === "itinerary") {
+      const text = valueFor("itineraryText");
+      if (!text) {
+        showToast("Hãy nhập nội dung lịch trình.");
+        return;
+      }
+      const details = getDayDetails();
+      const entry = existing
+        ? details.itinerary.find((item) => item.id === existing.id)
+        : { id: uid(), done: false };
+      if (!entry) {
+        showToast("Không tìm thấy lịch trình cần sửa.");
+        return;
+      }
+      entry.time = $("itineraryTime").value;
+      entry.text = text;
+      if (!existing) details.itinerary.push(entry);
+    } else if (type === "expense") {
+      const text = valueFor("expenseText");
+      const rawAmount = $("expenseAmount").value;
+      const amount = Number(rawAmount);
+      if (!text || rawAmount === "" || !Number.isFinite(amount) || amount < 0) {
+        showToast("Nhập tên khoản chi và số tiền hợp lệ.");
+        return;
+      }
+      const details = getDayDetails();
+      const entry = existing
+        ? details.expenses.find((item) => item.id === existing.id)
+        : { id: uid() };
+      if (!entry) {
+        showToast("Không tìm thấy khoản chi cần sửa.");
+        return;
+      }
+      entry.text = text;
+      entry.category = valueFor("expenseCategory");
+      entry.amount = amount;
+      if (!existing) details.expenses.push(entry);
+    }
+
+    $("photoInput").value = "";
+    closeDayItemModal();
+    persistState();
+    renderCalendar();
+    renderDay();
   }
 
   function initGoogleAuth() {
@@ -608,7 +759,18 @@
             return;
           }
           accessToken = response.access_token;
-          updateGoogleButton();
+          try {
+            googleProfile = await loadGoogleProfile(accessToken);
+            updateGoogleButton();
+          } catch (error) {
+            console.error("Could not load Google profile.", error);
+            accessToken = null;
+            googleProfile = null;
+            updateGoogleButton();
+            setSyncStatus("error", "Không tải được hồ sơ Google");
+            showToast("Không thể tải Gmail và ảnh đại diện. Hãy kết nối lại Google.");
+            return;
+          }
           try {
             await loadFromDrive();
             setSyncStatus("", "Đã đồng bộ Google Drive");
@@ -774,10 +936,31 @@
     renderDay();
   };
   $("todayButton").addEventListener("click", goToToday);
-  $("todayRailButton").addEventListener("click", goToToday);
+  $("todayMenuButton").addEventListener("click", () => {
+    goToToday();
+    closeMenu();
+    $("selectedDateLabel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("calendarMenuButton").addEventListener("click", () => {
+    closeMenu();
+    document.querySelector(".calendar-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  const closeMenu = () => {
+    els.menuPopover.hidden = true;
+    els.menuToggle.setAttribute("aria-expanded", "false");
+    els.menuToggle.setAttribute("aria-label", "Mở menu");
+  };
+  els.menuToggle.addEventListener("click", () => {
+    const isOpen = !els.menuPopover.hidden;
+    els.menuPopover.hidden = isOpen;
+    els.menuToggle.setAttribute("aria-expanded", String(!isOpen));
+    els.menuToggle.setAttribute("aria-label", isOpen ? "Mở menu" : "Đóng menu");
+  });
+  document.addEventListener("click", (event) => {
+    if (!els.menuPopover.hidden && !els.menuPopover.contains(event.target) && !els.menuToggle.contains(event.target)) closeMenu();
+  });
   $("todayDateLabel").textContent = `${today.getDate()}/${today.getMonth() + 1}`;
-  $("addRootButton").addEventListener("click", () => openNoteModal(null));
-  $("emptyAddButton").addEventListener("click", () => openNoteModal(null));
+  $("addDayItemButton").addEventListener("click", () => openDayItemModal());
   $("editTitleButton").addEventListener("click", () => {
     els.tripTitle.focus();
     const range = document.createRange();
@@ -794,95 +977,17 @@
     }
   });
   els.destinationInput.addEventListener("change", updateTripDetails);
-  $("editDayNoteButton").addEventListener("click", () => {
-    const updated = window.prompt("Ghi một lời nhắn nhỏ cho ngày này:", state.dayNotes[selectedDate] || "");
-    if (updated === null) return;
-    state.dayNotes[selectedDate] = updated.trim();
-    persistState();
-    renderDay();
+  els.dayItemType.addEventListener("change", updateItemModalFields);
+  $("itemModalClose").addEventListener("click", closeDayItemModal);
+  $("itemModalCancel").addEventListener("click", closeDayItemModal);
+  els.itemModalBackdrop.addEventListener("click", (event) => {
+    if (event.target === els.itemModalBackdrop) closeDayItemModal();
   });
-  els.dayPlanInput.addEventListener("input", () => {
-    const details = getDayDetails();
-    const hadPlan = Boolean(details.plan);
-    details.plan = els.dayPlanInput.value;
-    if (!hadPlan && details.plan) renderCalendar();
-    window.clearTimeout(planSaveTimer);
-    planSaveTimer = window.setTimeout(persistState, 450);
-  });
-  els.dayPlanInput.addEventListener("blur", () => {
-    window.clearTimeout(planSaveTimer);
-    persistState();
-  });
-  $("itineraryForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const text = $("itineraryText").value.trim();
-    if (!text) return;
-    getDayDetails().itinerary.push({
-      id: uid(),
-      time: $("itineraryTime").value,
-      text,
-      done: false
-    });
-    $("itineraryForm").reset();
-    persistState();
-    renderCalendar();
-    renderDay();
-  });
-  $("expenseForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const text = $("expenseText").value.trim();
-    const amount = Number($("expenseAmount").value);
-    if (!text || !Number.isFinite(amount) || amount < 0) return;
-    getDayDetails().expenses.push({
-      id: uid(),
-      text,
-      category: $("expenseCategory").value.trim(),
-      amount
-    });
-    $("expenseForm").reset();
-    persistState();
-    renderCalendar();
-    renderDay();
-  });
-  $("photoInput").addEventListener("change", async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) return;
-    const details = getDayDetails();
-    const failures = [];
-    for (const file of files) {
-      try {
-        const dataUrl = await compressImage(file);
-        details.photos.push({
-          id: uid(),
-          name: file.name,
-          mimeType: dataUrl.slice(5, dataUrl.indexOf(";")),
-          dataUrl
-        });
-      } catch (error) {
-        console.error(`Could not add photo "${file.name}".`, error);
-        failures.push(file.name);
-      }
-    }
-    event.target.value = "";
-    if (files.length !== failures.length) {
-      persistState();
-      renderCalendar();
-      renderDay();
-    }
-    if (failures.length) showToast(`Không thể thêm ${failures.length} ảnh. Tệp cần là ảnh hợp lệ và nhỏ hơn 15 MB.`);
-  });
-  $("modalClose").addEventListener("click", closeNoteModal);
-  $("modalCancel").addEventListener("click", closeNoteModal);
-  els.modalBackdrop.addEventListener("click", (event) => {
-    if (event.target === els.modalBackdrop) closeNoteModal();
-  });
-  els.noteForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const text = els.noteInput.value.trim();
-    if (text) saveNode(text);
-  });
+  els.dayItemForm.addEventListener("submit", saveDayItem);
   window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !els.modalBackdrop.hidden) closeNoteModal();
+    if (event.key !== "Escape") return;
+    if (!els.itemModalBackdrop.hidden) closeDayItemModal();
+    if (!els.menuPopover.hidden) closeMenu();
   });
   els.googleButton.addEventListener("click", () => {
     if (CLIENT_ID === "YOUR_GOOGLE_OAUTH_CLIENT_ID") {

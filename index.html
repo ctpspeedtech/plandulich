@@ -15,37 +15,35 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="rail" aria-label="Điều hướng">
-        <a class="brand-mark" href="#" aria-label="Ngày Mình Đi">
-          <span class="brand-sun"></span>
-          <span class="brand-wave"></span>
-        </a>
-        <div class="rail-links">
-          <button class="rail-button active" aria-label="Lịch trình" title="Lịch trình">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="3"></rect><path d="M7.5 3.5v3M16.5 3.5v3M3.5 9.5h17M8 13h3M8 16h6"></path></svg>
-          </button>
-          <button class="rail-button" id="todayRailButton" aria-label="Hôm nay" title="Hôm nay">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7v5l3 2"></path></svg>
-          </button>
-        </div>
-        <div class="rail-bottom">
-          <span class="rail-avatar" aria-hidden="true">M</span>
-        </div>
-      </aside>
-
       <main class="workspace">
         <header class="topbar">
-          <div class="topbar-brand">
-            <span class="eyebrow">MỘT CHUYẾN ĐI ĐANG CHỜ</span>
-            <h1>Ngày Mình Đi<span class="brand-period">.</span></h1>
-          </div>
-          <div class="topbar-actions">
-            <span class="sync-state" id="syncState"><span class="sync-dot"></span><span id="syncText">Đang lưu trên thiết bị</span></span>
-            <button class="google-button" id="googleButton" type="button">
-              <span class="google-g" aria-hidden="true">G</span>
-              <span id="googleButtonText">Kết nối Google</span>
+          <div class="topbar-main">
+            <button class="menu-toggle" id="menuToggle" type="button" aria-label="Mở menu" aria-controls="menuPopover" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
+            <div class="topbar-brand">
+              <span class="eyebrow">MỘT CHUYẾN ĐI ĐANG CHỜ</span>
+              <h1>Ngày Mình Đi<span class="brand-period">.</span></h1>
+            </div>
+            <div class="topbar-actions">
+              <span class="sync-state" id="syncState"><span class="sync-dot"></span><span id="syncText">Đang lưu trên thiết bị</span></span>
+              <button class="google-button" id="googleButton" type="button">
+                <span class="google-g" aria-hidden="true">G</span>
+                <span id="googleButtonText">Kết nối Google</span>
+              </button>
+              <div class="google-profile" id="googleProfile" hidden>
+                <span class="profile-avatar">
+                  <img id="googleProfileImage" alt="" hidden />
+                  <span id="googleProfileInitials"></span>
+                </span>
+                <span class="google-profile-email" id="googleProfileEmail"></span>
+              </div>
+            </div>
           </div>
+          <nav class="menu-popover" id="menuPopover" aria-label="Menu" hidden>
+            <button type="button" id="calendarMenuButton">Đến lịch</button>
+            <button type="button" id="todayMenuButton">Về hôm nay</button>
+          </nav>
         </header>
 
         <section class="trip-heading">
@@ -108,86 +106,13 @@
                   <span class="day-count" id="dayCount">0 mục</span>
                 </div>
               </div>
+              <button class="add-root-button" id="addDayItemButton" type="button"><span>+</span> Thêm mục</button>
             </div>
-            <div class="day-sections">
-              <section class="day-section plan-section" id="planPanel">
-                <label class="panel-label" for="dayPlanInput">Ý TƯỞNG VÀ NHỊP ĐIỆU</label>
-                <textarea id="dayPlanInput" class="day-plan-input" placeholder="Viết vài dòng về cảm hứng, mục tiêu hay nhịp điệu bạn muốn cho ngày này..."></textarea>
-                <p class="panel-hint">Một khoảng trống nhỏ để hình dung về ngày thật đẹp của mình.</p>
-              </section>
-              <section class="day-section notes-section" id="notesPanel">
-                <div class="panel-heading">
-                  <div>
-                    <span class="panel-label">GHI CHÚ PHÂN NHÁNH</span>
-                    <p class="panel-hint">Tách một ý tưởng thành những điều nhỏ hơn.</p>
-                  </div>
-                  <button class="add-root-button" id="addRootButton" type="button"><span>+</span> Thêm ghi chú</button>
-                </div>
-                <div class="day-note" id="dayNote">
-                  <span class="day-note-icon" aria-hidden="true">✦</span>
-                  <span id="dayNoteText">Mỗi hành trình bắt đầu từ một ý tưởng nhỏ.</span>
-                  <button id="editDayNoteButton" type="button" aria-label="Sửa lời nhắn trong ngày" title="Sửa lời nhắn">Sửa</button>
-                </div>
-                <div class="tree-container" id="treeContainer"></div>
-                <div class="empty-state" id="emptyState" hidden>
-                  <span class="empty-illustration" aria-hidden="true">✳</span>
-                  <strong>Ngày này còn đang để ngỏ</strong>
-                  <span>Thêm một ý tưởng, địa điểm hay điều muốn thử.</span>
-                  <button id="emptyAddButton" type="button">Viết ghi chú đầu tiên <span>↗</span></button>
-                </div>
-                <div class="notes-footer">
-                  <span><span class="tree-legend-line"></span> Ý tưởng có thể lớn dần thành nhánh</span>
-                  <span id="noteCountFooter">0 ý tưởng</span>
-                </div>
-              </section>
-              <section class="day-section itinerary-section" id="itineraryPanel">
-                <div class="panel-heading">
-                  <div>
-                    <span class="panel-label">LỊCH TRÌNH</span>
-                    <p class="panel-hint">Sắp xếp những điểm dừng và khoảnh khắc trong ngày.</p>
-                  </div>
-                </div>
-                <form class="entry-form itinerary-form" id="itineraryForm">
-                  <label><span>Giờ</span><input id="itineraryTime" type="time" aria-label="Giờ bắt đầu" /></label>
-                  <label class="entry-main-field"><span>Đi đâu, làm gì?</span><input id="itineraryText" maxlength="120" placeholder="Ví dụ: Ăn sáng ở tiệm bánh nhỏ" required /></label>
-                  <button class="add-entry-button" type="submit" aria-label="Thêm lịch trình">+</button>
-                </form>
-                <div class="entry-list" id="itineraryList"></div>
-                <div class="section-empty" id="itineraryEmpty">Ngày chưa có lịch cố định. Cứ để mình thong thả nhé.</div>
-              </section>
-              <section class="day-section expenses-section" id="expensesPanel">
-                <div class="panel-heading expense-heading">
-                  <div>
-                    <span class="panel-label">CHI TIÊU</span>
-                    <p class="panel-hint">Theo dõi ngân sách nhẹ nhàng, không áp lực.</p>
-                  </div>
-                  <div class="expense-summary"><span>TỔNG DỰ KIẾN</span><strong id="expenseTotal">0 ₫</strong></div>
-                </div>
-                <form class="entry-form expense-form" id="expenseForm">
-                  <label class="entry-main-field"><span>Khoản chi</span><input id="expenseText" maxlength="80" placeholder="Ví dụ: Vé tham quan" required /></label>
-                  <label><span>Nhóm</span><input id="expenseCategory" maxlength="30" placeholder="Di chuyển" /></label>
-                  <label><span>Số tiền (₫)</span><input id="expenseAmount" type="number" min="0" step="1000" placeholder="0" required /></label>
-                  <button class="add-entry-button" type="submit" aria-label="Thêm khoản chi">+</button>
-                </form>
-                <div class="expense-table-wrap">
-                  <table class="expense-table">
-                    <thead><tr><th>Khoản chi</th><th>Nhóm</th><th class="amount-cell">Số tiền</th><th></th></tr></thead>
-                    <tbody id="expenseRows"></tbody>
-                  </table>
-                  <div class="section-empty" id="expenseEmpty">Chưa có khoản chi nào được ghi lại.</div>
-                </div>
-              </section>
-              <section class="day-section photos-section" id="photosPanel">
-                <div class="panel-heading">
-                  <div>
-                    <span class="panel-label">NHỮNG KHOẢNH KHẮC</span>
-                    <p class="panel-hint">Thêm ảnh để lưu lại cảm hứng cho ngày này.</p>
-                  </div>
-                  <label class="upload-button" for="photoInput">+ Thêm ảnh<input id="photoInput" type="file" accept="image/*" multiple hidden /></label>
-                </div>
-                <div class="photo-grid" id="photoGrid"></div>
-                <div class="section-empty" id="photosEmpty">Chưa có ảnh nào. Một tấm hình cũng đủ gợi cả chuyến đi.</div>
-              </section>
+            <div class="day-item-list" id="dayItemList" aria-live="polite"></div>
+            <div class="day-items-empty" id="dayItemsEmpty" hidden>
+              <span class="empty-illustration" aria-hidden="true">✳</span>
+              <strong>Ngày này còn đang để ngỏ</strong>
+              <span>Gom ghi chú, lịch trình, chi tiêu và ảnh vào đây.</span>
             </div>
           </section>
         </section>
@@ -200,16 +125,58 @@
       </main>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <div class="modal-backdrop" id="modalBackdrop" hidden>
-      <form class="note-modal" id="noteForm">
-        <button class="modal-close" id="modalClose" type="button" aria-label="Đóng">×</button>
-        <span class="section-kicker" id="modalKicker">MỘT Ý TƯỞNG MỚI</span>
-        <h3 id="modalTitle">Thêm ghi chú</h3>
-        <label for="noteInput">Bạn đang nghĩ gì?</label>
-        <input id="noteInput" maxlength="140" placeholder="Ví dụ: Ngắm bình minh trên biển..." required />
+    <div class="modal-backdrop" id="itemModalBackdrop" hidden>
+      <form class="note-modal item-modal" id="dayItemForm">
+        <button class="modal-close" id="itemModalClose" type="button" aria-label="Đóng">×</button>
+        <span class="section-kicker" id="itemModalKicker">MỘT MỤC MỚI</span>
+        <h3 id="itemModalTitle">Thêm vào ngày</h3>
+        <label for="dayItemType">Loại nội dung</label>
+        <select id="dayItemType">
+          <option value="note">Ghi chú</option>
+          <option value="plan">Ý tưởng trong ngày</option>
+          <option value="dayNote">Lời nhắn</option>
+          <option value="itinerary">Lịch trình</option>
+          <option value="expense">Chi tiêu</option>
+          <option value="photo">Ảnh</option>
+        </select>
+        <div class="item-fields" data-item-fields="note">
+          <label for="noteInput">Bạn đang nghĩ gì?</label>
+          <textarea id="noteInput" maxlength="500" rows="3" placeholder="Ví dụ: Ngắm bình minh trên biển..."></textarea>
+          <div class="note-parent-field">
+            <label for="noteParent">Nhánh của</label>
+            <select id="noteParent"><option value="">Ghi chú mới</option></select>
+          </div>
+        </div>
+        <div class="item-fields" data-item-fields="plan" hidden>
+          <label for="dayPlanInput">Ý tưởng trong ngày</label>
+          <textarea id="dayPlanInput" maxlength="2000" rows="4" placeholder="Viết về cảm hứng, mục tiêu hay nhịp điệu của ngày này..."></textarea>
+        </div>
+        <div class="item-fields" data-item-fields="dayNote" hidden>
+          <label for="dayNoteInput">Lời nhắn</label>
+          <textarea id="dayNoteInput" maxlength="300" rows="3" placeholder="Một lời nhắc nhỏ cho ngày này..."></textarea>
+        </div>
+        <div class="item-fields" data-item-fields="itinerary" hidden>
+          <label for="itineraryTime">Giờ bắt đầu</label>
+          <input id="itineraryTime" type="time" />
+          <label for="itineraryText">Đi đâu, làm gì?</label>
+          <input id="itineraryText" maxlength="120" placeholder="Ví dụ: Ăn sáng ở tiệm bánh nhỏ" />
+        </div>
+        <div class="item-fields" data-item-fields="expense" hidden>
+          <label for="expenseText">Khoản chi</label>
+          <input id="expenseText" maxlength="80" placeholder="Ví dụ: Vé tham quan" />
+          <label for="expenseCategory">Nhóm</label>
+          <input id="expenseCategory" maxlength="30" placeholder="Di chuyển" />
+          <label for="expenseAmount">Số tiền (₫)</label>
+          <input id="expenseAmount" type="number" min="0" step="1000" placeholder="0" />
+        </div>
+        <div class="item-fields" data-item-fields="photo" hidden>
+          <label for="photoInput">Chọn ảnh</label>
+          <input id="photoInput" type="file" accept="image/*" multiple />
+          <p class="panel-hint">Ảnh sẽ được thu nhỏ trước khi lưu.</p>
+        </div>
         <div class="modal-actions">
-          <button type="button" class="modal-cancel" id="modalCancel">Để sau</button>
-          <button type="submit" class="modal-submit">Thêm vào cây <span>↗</span></button>
+          <button type="button" class="modal-cancel" id="itemModalCancel">Để sau</button>
+          <button type="submit" class="modal-submit" id="itemModalSubmit">Thêm mục <span>↗</span></button>
         </div>
       </form>
     </div>
