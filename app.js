@@ -45,7 +45,7 @@
     googleProfileImage: $("googleProfileImage"), googleProfileInitials: $("googleProfileInitials"),
     googleProfileEmail: $("googleProfileEmail"), itemModalBackdrop: $("itemModalBackdrop"),
     dayItemForm: $("dayItemForm"), dayItemType: $("dayItemType"), noteInput: $("noteInput"),
-    todayDateLabel: $("todayDateLabel"), menuToggle: $("menuToggle"), menuPopover: $("menuPopover")
+    todayDateLabel: $("todayDateLabel")
   };
 
   function loadLocalState() {
@@ -71,6 +71,7 @@
     if (status === "saving") els.syncState.classList.add("saving");
     if (status === "error") els.syncState.classList.add("error");
     els.syncText.textContent = message;
+    els.syncState.title = message;
   }
 
   function showToast(message) {
@@ -531,6 +532,7 @@
 
   function updateGoogleButton() {
     const connected = Boolean(accessToken && googleProfile);
+    els.googleButton.setAttribute("aria-label", els.googleButtonText.textContent);
     els.googleButton.hidden = connected;
     els.googleProfile.hidden = !connected;
     if (!connected) {
@@ -540,6 +542,8 @@
       return;
     }
     els.googleProfileEmail.textContent = googleProfile.email;
+    els.googleProfile.setAttribute("aria-label", `Tài khoản Google: ${googleProfile.email}`);
+    els.googleProfile.title = googleProfile.email;
     const initials = googleProfile.name
       ? googleProfile.name.trim().split(/\s+/).slice(-2).map((part) => part[0]).join("").toUpperCase()
       : googleProfile.email[0].toUpperCase();
@@ -936,29 +940,6 @@
     renderDay();
   };
   $("todayButton").addEventListener("click", goToToday);
-  $("todayMenuButton").addEventListener("click", () => {
-    goToToday();
-    closeMenu();
-    $("selectedDateLabel").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  $("calendarMenuButton").addEventListener("click", () => {
-    closeMenu();
-    document.querySelector(".calendar-card").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  const closeMenu = () => {
-    els.menuPopover.hidden = true;
-    els.menuToggle.setAttribute("aria-expanded", "false");
-    els.menuToggle.setAttribute("aria-label", "Mở menu");
-  };
-  els.menuToggle.addEventListener("click", () => {
-    const isOpen = !els.menuPopover.hidden;
-    els.menuPopover.hidden = isOpen;
-    els.menuToggle.setAttribute("aria-expanded", String(!isOpen));
-    els.menuToggle.setAttribute("aria-label", isOpen ? "Mở menu" : "Đóng menu");
-  });
-  document.addEventListener("click", (event) => {
-    if (!els.menuPopover.hidden && !els.menuPopover.contains(event.target) && !els.menuToggle.contains(event.target)) closeMenu();
-  });
   $("todayDateLabel").textContent = `${today.getDate()}/${today.getMonth() + 1}`;
   $("addDayItemButton").addEventListener("click", () => openDayItemModal());
   $("editTitleButton").addEventListener("click", () => {
@@ -987,7 +968,6 @@
   window.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (!els.itemModalBackdrop.hidden) closeDayItemModal();
-    if (!els.menuPopover.hidden) closeMenu();
   });
   els.googleButton.addEventListener("click", () => {
     if (CLIENT_ID === "YOUR_GOOGLE_OAUTH_CLIENT_ID") {

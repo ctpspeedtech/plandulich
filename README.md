@@ -1,6 +1,6 @@
 # Ngày Mình Đi
 
-Trang single-page lên kế hoạch du lịch với lịch xem tháng/năm, menu hamburger và một danh sách chung cho nội dung từng ngày: kế hoạch, ghi chú dạng cây, lịch trình, chi tiêu và ảnh. Nút **Thêm mục** mở hộp thoại để chọn loại nội dung; sau khi đăng nhập, email và ảnh đại diện Google được hiển thị trong hồ sơ. Ứng dụng chạy thuần HTML/CSS/JavaScript, không cần backend riêng.
+Trang single-page lên kế hoạch du lịch với lịch xem tháng/năm, header tối giản và một danh sách chung cho nội dung từng ngày: kế hoạch, ghi chú dạng cây, lịch trình, chi tiêu và ảnh. Nút **Thêm mục** mở hộp thoại để chọn loại nội dung; sau khi đăng nhập, email và ảnh đại diện Google được hiển thị trong hồ sơ. Trên mobile, hồ sơ rút gọn còn avatar. Ứng dụng chạy thuần HTML/CSS/JavaScript, không cần backend riêng.
 
 ## Chạy giao diện
 
